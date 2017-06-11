@@ -1,0 +1,50 @@
+- name: Install corosync pacemaker
+  apt: name={{ item }} update_cache=yes state=present
+  with_items:
+  - pacemaker
+  - corosync
+  - python-pip
+- pip:
+    name: pexpect
+
+- name: Keygen corosync
+  shell: sudo corosync-keygen -l
+  when: inventory_hostname == "Nc1"
+
+- name: Copy files
+  copy: remote_src=True src=/etc/corosync/authkey dest=/home/vagrant/authkey
+
+  when: inventory_hostname == "Nc1"
+- name: Move key
+  command: mv /home/vagrant/authkey /etc/corosync/authkey
+  become: yes
+  when: inventory_hostname == "Nc1"
+
+- file:
+    path: /etc/corosync/authkey
+    mode: 0400
+  when: inventory_hostname == "Nc2"
+- name: Copying corosync1 Conf
+  copy:
+    src: corosync.conf
+    dest: /etc/corosync/corosync.conf
+  when: inventory_hostname == "Nc1"
+- name: Copying corosync2 Conf
+  copy:
+    src: corosync2.conf
+    dest: /etc/corosync/corosync.conf
+  when: inventory_hostname == "Nc2"
+
+- name: Automatic start
+  blockinfile:
+    dest: /etc/default/corosync
+    insertbefore: "#OPTIONS="
+    block: |
+       START=yes
+- name: Disable quorum
+  shell: crm configure property no-quorum-policy=ignore
+  when: inventory_hostname == "Nc2"
+
+- name: Copy and Execute the script
+  script: ip.sh
+  when: inventory_hostname == "Nc2"

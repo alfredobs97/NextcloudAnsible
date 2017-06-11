@@ -1,0 +1,40 @@
+- name: Config Languague
+  command: locale-gen es_ES.UTF-8
+
+- name: Install Haproxy
+  apt: name=haproxy update_cache=yes state=present
+
+- replace:
+    dest=/etc/default/haproxy
+    regexp='ENABLED=0'
+    replace='ENABLED=1'
+    backup=yes
+
+- name: Copying HAProxy Conf
+  copy:
+    src: haproxy.cfg
+    dest: /etc/haproxy/haproxy.cfg
+
+- name: Starting Haproxy
+  service:
+    name: haproxy
+    state: restarted
+
+- file:
+    path: /etc/Firewall
+    state: directory
+    mode: 0755
+
+#- name: Copying Iptables
+#  copy:
+#    src: iptables
+#    dest: /etc/Firewall/iptables.sh
+
+#- name: IPtables to rc.local
+#  blockinfile:
+#    dest: /etc/rc.local
+#    insertbefore: "exit"
+#    block: |
+#       sh /etc/Firewall/iptables.sh
+#- name: Running IPtables
+#  shell: /etc/rc.local

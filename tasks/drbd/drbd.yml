@@ -1,0 +1,112 @@
+- name: Install drbd
+  apt: name={{ item }} update_cache=yes state=present
+  with_items:
+    - python-pip
+    - drbd8-utils
+    - linux-server
+- pip:
+   name: pexpect
+- copy:
+     src: Nc1up.sh
+     dest: /home/vagrant/Nc1up.sh
+     mode: 0777
+  when: inventory_hostname == "Nc2"
+
+- name: Add execute script
+  blockinfile:
+    dest: /etc/rc.local
+    insertbefore: "By default this script does nothing."
+    block: |
+         /home/vagrant/Nc1up.sh
+  when: inventory_hostname == "Nc2"
+
+- name: Restart
+  shell: sleep 5 && /sbin/shutdown -r now "Reboot server"
+#  async: 5
+  poll: 20
+
+- name: Waiting for server to come back
+  local_action: wait_for host="{{ inventory_hostname }}" search_regex=OpenSSH port=22 timeout=300
+- name: Copying drbd Conf
+  copy:
+    src: drbd.conf
+    dest: /etc/drbd.conf
+- name: Add hostname
+  blockinfile:
+    dest: /etc/hosts
+    insertbefore: "127.0.0.1 localhost"
+    block: |
+         192.168.80.10 nc1
+         192.168.80.11 nc2
+- parted:
+    device: /dev/sdb
+    number: 1
+    state: present
+
+- filesystem:
+    fstype: ext4
+    dev: /dev/sdb1
+
+
+- expect:
+   command: drbdadm create-md r0
+   responses:
+       (?i)Do you want to proceed?: "yes"
+
+- service:
+    name: drbd
+    state: restarted
+
+- name: start master
+  shell:  drbdadm -- --overwrite-data-of-peer primary all
+  when: inventory_hostname == "Nc1"
+
+- filesystem:
+    fstype: ext4
+    dev: /dev/drbd0
+  when: inventory_hostname == "Nc1"
+
+- file:
+    path: /Data
+    state: directory
+    mode: 0755
+
+- name: Mount up device
+  mount:
+    path: /Data
+    src: /dev/drbd0
+    fstype: ext4
+    state: present
+  when: inventory_hostname == "Nc1"
+  become: yes
+
+- name: mount
+  shell:  mount -a
+  when: inventory_hostname == "Nc1"
+  become: yes
+
+- name: Creates directory
+  file: path=/tmp/nextcloud state=directory
+  when: inventory_hostname == "Nc1"
+
+- pause:
+    minutes: 6
+    prompt: "DRBD WORKING... WAIT PLEASE"
+  when: inventory_hostname == "Nc2"
+
+- name: start dual-master
+  shell:  drbdadm primary all
+  when: inventory_hostname == "Nc2"
+
+- name: Mount up device
+  mount:
+   path: /Data
+   src: /dev/drbd0
+   fstype: ext4
+   state: present
+  when: inventory_hostname == "Nc2"
+  become: yes
+- name: mount
+  shell:  mount -a
+  when: inventory_hostname == "Nc2"
+  become: yes

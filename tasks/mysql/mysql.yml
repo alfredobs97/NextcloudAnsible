@@ -1,0 +1,143 @@
+- name: Installing Packets
+  apt: name="{{ item }}" update_cache=yes state=present
+  with_items:
+    - mysql-server
+    - python-mysqldb
+
+- name: Creating database
+  mysql_db:
+    name: nextcloud
+    state: present
+
+- name: create the replication users
+  mysql_user:
+    name: repli
+    host: '%'
+    password: repli
+    priv: '*.*:REPLICATION SLAVE'
+    state: present
+
+- name: user vagrant
+  mysql_user:
+    name: vagrant
+    password: vagrant
+    host: '%'
+    priv: '*.*:ALL'
+    state: present
+
+- replace:
+    dest=/etc/mysql/my.cnf
+    regexp='127.0.0.1'
+    replace='192.168.80.15'
+  when: inventory_hostname == "Mysql1"
+
+- replace:
+    dest=/etc/mysql/my.cnf
+    regexp='127.0.0.1'
+    replace='192.168.80.16'
+  when: inventory_hostname == "Mysql2"
+
+- replace:
+    dest=/etc/mysql/my.cnf
+    regexp='#server-id'
+    replace='server-id'
+  when: inventory_hostname == "Mysql1"
+
+- replace:
+    dest=/etc/mysql/my.cnf
+    regexp='#server-id		= 1'
+    replace='server-id		= 2'
+  when: inventory_hostname == "Mysql2"
+
+- replace:
+    dest=/etc/mysql/my.cnf
+    regexp='#log_bin'
+    replace='log_bin'
+
+- replace:
+    dest=/etc/mysql/my.cnf
+    regexp='#binlog_do_db		= include_database_name'
+    replace='binlog_do_db		= nextcloud'
+
+- mysql_replication:
+    mode: stopslave
+
+- mysql_replication:
+    mode: changemaster
+    master_host: 192.168.80.16
+    master_log_file: mysql-bin.000001
+    master_user: repli
+    master_password: repli
+    master_log_pos: 1
+  when: inventory_hostname == "Mysql1"
+
+- mysql_replication:
+    mode: startslave
+  when: inventory_hostname == "Mysql1"
+
+- mysql_replication:
+    mode: changemaster
+    master_host: 192.168.80.15
+    master_user: repli
+    master_password: repli
+    master_log_file: mysql-bin.000001
+    master_log_pos: 1
+  when: inventory_hostname == "Mysql2"
+
+- mysql_replication:
+    mode: startslave
+  when: inventory_hostname == "Mysql2"
+
+- name: Create haproxy user
+  command: mysql -u vagrant -pvagrant -e "INSERT INTO mysql.user (Host,User) values ('192.168.80.14','haproxy_check'); FLUSH PRIVILEGES;"
+
+- name: Fixing problems with nextcloud database
+  command: mysql -u vagrant -pvagrant -e "SET GLOBAL binlog_format = 'ROW'";
+
+
+- name: Restarting mysql
+  service:
+    name: mysql
+    state: restarted
+#- mysql_replication:
+#   mode: startmaster
+#
+#- name: Check master1 replication status.
+#  mysql_replication:
+#    mode: getmaster
+#    login_user: vagrant
+#    login_password: vagrant
+#  ignore_errors: true
+#  register: master1
+#  when: inventory_hostname == "Mysql1"
+
+#- name: Check master2 replication status.
+#  mysql_replication:
+#    mode: getmaster
+#    login_user: vagrant
+#    login_password: vagrant
+#  ignore_errors: true
+#  register: master2
+#  when: inventory_hostname == "Mysql2"
+#- debug: var=master1.File
+#- debug: var=master1.Position
+#- #debug: var=master1
+#- mysql_replication:
+#    mode: changemaster
+#    master_host: 192.168.80.16
+#    master_log_file: "{{ master2.File }}"
+#    master_log_pos: "{{ master2.Position }}"
+#    master_user: repli
+#    master_password: repli
+#  when: inventory_hostname == "Mysql1"
+
+
+
+#- mysql_replication:
+#    mode: changemaster
+#    master_host: 192.168.80.15
+#    master_log_file: "{{ master.File }}"
+#    master_log_pos: "{{ master.Position }}"
+#    master_user: repli
+#    master_password: repli
+#  when: inventory_hostname == "Mysql2"

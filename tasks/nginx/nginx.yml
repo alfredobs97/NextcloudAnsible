@@ -1,0 +1,53 @@
+- name: Install nginx as reverse proxy
+  apt: name=nginx update_cache=yes state=present
+
+- file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Copying Nginx Conf
+  copy:
+    src: proxy.conf
+    dest: /etc/nginx/sites-enabled/proxy.conf
+
+- name: Restarting nginx
+  service:
+    name: nginx
+    state: restarted
+
+- name: Install plugins to check services
+  apt: name="{{ item }}" update_cache=yes state=present
+  with_items:
+    - git
+    - php5-cli
+
+- git:
+    repo: https://github.com/PHPMailer/PHPMailer.git
+    dest: /home/vagrant/PHPMailer
+
+- copy:
+     src: mail1.php
+     dest: /home/vagrant/mail1.php
+
+- copy:
+     src: mail2.php
+     dest: /home/vagrant/mail2.php
+
+- copy:
+     src: ifhostisup.sh
+     dest: /home/vagrant/ifhostisup.sh
+     mode: 0777
+
+- name: Add execute script
+  blockinfile:
+    dest: /etc/rc.local
+    insertbefore: "By default this script does nothing."
+    block: |
+         /home/vagrant/ifhostisup.sh
+- name: Restart
+  shell: sleep 5 && /sbin/shutdown -r now "Reboot server"
+#  async: 5
+  poll: 20
+
+- name: Waiting for server to come back
+  local_action: wait_for host="{{ inventory_hostname }}" search_regex=OpenSSH port=22 timeout=300

@@ -1,0 +1,11 @@
+---
+- hosts: Nc1:Nc2
+  become: true
+
+  tasks:
+        - name: actualizando la cache de apt
+          apt: update_cache=yes
+
+        - include: keep.yml
+        - include : ../drbd/drbd.yml
+        - include : ../apache/apache.yml

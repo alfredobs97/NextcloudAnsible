@@ -1,0 +1,77 @@
+- apt_repository:
+    repo: 'ppa:ondrej/php'
+
+
+- name: Install requeriments
+  apt: name="{{ item }}"  state=latest update_cache=yes
+  with_items:
+    - php7.0
+    - php7.0-gd
+    - php7.0-mysql
+    - php7.0-json
+    - php7.0-curl
+    - apache2
+    - php7.0-mbstring
+    - php7.0-xml
+    - mysql-client
+    - php7.0-zip
+
+
+- name: Copying Nextcloud Conf
+  copy:
+    src: next.conf
+    dest: /etc/apache2/sites-available/next.conf
+
+- name: desactivate 000-default
+  shell: a2dissite 000-default
+  become: yes
+
+
+- name: Creates directory
+  file: path=/tmp/nextcloud state=directory
+  when: inventory_hostname == "Nc1"
+
+- unarchive:
+    src: https://download.nextcloud.com/server/releases/nextcloud-10.0.5.tar.bz2
+    dest: /tmp/nextcloud
+    remote_src: True
+  when: inventory_hostname == "Nc1"
+
+- name: move nextcloud
+  shell: mv /tmp/nextcloud /Data/nextcloud
+  when: inventory_hostname == "Nc1"
+
+- file:
+    path: /Data/nextcloud/nextcloud
+    owner: www-data
+    group: www-data
+    mode: 0755
+    state: directory
+    recurse: yes
+
+- file:
+    src: /Data/nextcloud/nextcloud
+    dest: /var/www/nextcloud
+    owner: www-data
+    group: www-data
+    state: link
+    mode: 0755
+
+- name: activate nextcloud
+  shell: a2ensite next
+  become: yes
+  
+- apache2_module:
+    state: present
+    name: "{{ item }}"
+  with_items:
+    - rewrite
+    - headers
+    - env
+    - dir
+    - mime
+
+- name: Restarting apache
+  service:
+    name: apache2
+    state: restarted

@@ -1,0 +1,9 @@
+---
+- hosts: Mysql1:Mysql2
+  become: true
+
+  tasks:
+        - name: actualizando la cache de apt
+          apt: update_cache=yes
+
+        - include: mysql.yml

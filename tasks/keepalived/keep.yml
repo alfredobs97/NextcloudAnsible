@@ -1,0 +1,18 @@
+- name: Install keepalived
+  apt: name=keepalived update_cache=yes state=present
+
+- name: Copying keepalived1 Conf
+  copy:
+    src: keepalived1.conf
+    dest: /etc/keepalived/keepalived.conf
+  when: inventory_hostname == "Nc1"
+
+- name: Copying corosync2 Conf
+  copy:
+    src: keepalived2.conf
+    dest: /etc/keepalived/keepalived.conf
+  when: inventory_hostname == "Nc2"
+
+- service:
+    name: keepalived
+    state: started
